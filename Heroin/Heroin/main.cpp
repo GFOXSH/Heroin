@@ -3,41 +3,34 @@
 #include "./msdetours/detours.h"	// Need to replace with custom detours library 
 #pragma comment(lib, "Opengl32.lib")
 
-BOOL Found_An_Entity = FALSE;
-
 typedef void (APIENTRY* Type_glBegin)(GLenum mode);
-Type_glBegin Original_glBegin = 0;
+typedef void (APIENTRY* Type_glLightf)(GLenum num, GLenum pname, GLfloat param);
+Type_glBegin original_glBegin = 0;
+Type_glLightf original_glLightf = 0;
 
-static void APIENTRY Hooked_glBegin (GLenum mode) {
-	// Wallhack
-	if( ( mode == GL_TRIANGLE_STRIP || mode == GL_TRIANGLE_FAN ) && Found_An_Entity == FALSE )
-	{  
-		glDepthRange( 0.0f, 0.5f );
-		Found_An_Entity = TRUE;
-	}
-		
-	if( ( mode == GL_POLYGON || mode == GL_TRIANGLES || mode == GL_QUADS || mode == GL_QUAD_STRIP ) && Found_An_Entity == TRUE )
-	{
-		glDepthRange( 0.0f, 1.0f );
-		Found_An_Entity = FALSE;
-	}  
+void mod_glBegin(GLenum mode) {
+	glShadeModel(GL_FLAT);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_DITHER);
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
+	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_FALSE);
+	glDisable(GL_COLOR_MATERIAL);
+	(original_glBegin)(mode);
+}
 
-	(Original_glBegin)(mode); 
+void mod_glLightf(GLenum num) {
+	(original_glLightf)(num, GL_SPOT_CUTOFF, 180.0);
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
-	 DisableThreadLibraryCalls((HMODULE)hinstDLL); 
-
-	if (fdwReason == DLL_PROCESS_ATTACH) 
-	{
-		// Apply hooks
-		Original_glBegin = (Type_glBegin)(DetourFunction((unsigned char*)GetProcAddress(LoadLibrary("opengl32.dll"), "glBegin"),(unsigned char*)Hooked_glBegin)); 
+	DisableThreadLibraryCalls((HMODULE)hinstDLL);
+	if (fdwReason == DLL_PROCESS_ATTACH) {
+		original_glBegin = (Type_glBegin)(DetourFunction((unsigned char*)GetProcAddress(LoadLibrary("opengl32.dll"), "glBegin"), (unsigned char*)mod_glBegin));
+		original_glLightf = (Type_glLightf)(DetourFunction((unsigned char*)GetProcAddress(LoadLibrary("opengl32.dll"), "glLightf"), (unsigned char*)mod_glLightf));
 	}
-	else if (fdwReason == DLL_PROCESS_DETACH)
-	{
-		// Remove hooks
-		Original_glBegin = (Type_glBegin)(DetourFunction((unsigned char*)GetProcAddress(LoadLibrary("opengl32.dll"), "glBegin"),(unsigned char*)Original_glBegin)); 
+	else if (fdwReason == DLL_PROCESS_DETACH) {
+		original_glBegin = (Type_glBegin)(DetourFunction((unsigned char*)GetProcAddress(LoadLibrary("opengl32.dll"), "glBegin"), (unsigned char*)original_glBegin));
+		original_glLightf = (Type_glLightf)(DetourFunction((unsigned char*)GetProcAddress(LoadLibrary("opengl32.dll"), "glLightf"), (unsigned char*)original_glLightf));
 	}
-
-	return true; 
+	return true;
 }
